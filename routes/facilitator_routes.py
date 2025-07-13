@@ -209,7 +209,7 @@ def create_offering():
             "success": True,
             "message": "Offering created successfully",
             "offering_id": offering_id
-        }), 201
+        }, 201)
         
     except Exception as e:
         logger.error(f"Error creating offering: {e}")
@@ -526,4 +526,291 @@ def check_profile_completeness():
         return jsonify({
             "error": "Server error",
             "message": "Failed to check profile completeness"
+        }), 500
+
+# ================================================================================
+# ONBOARDING DATA RETRIEVAL ENDPOINTS
+# ================================================================================
+
+@facilitator_bp.route('/onboarding/step1-basic-info', methods=['GET'])
+@token_required
+def get_step1_basic_info():
+    """Get Step 1: Basic information data"""
+    try:
+        facilitator_id = request.facilitator_id
+        
+        # Get complete profile
+        profile = facilitator_repo.get_complete_facilitator_profile(facilitator_id)
+        
+        if not profile:
+            return jsonify({
+                "error": "Profile not found",
+                "message": "Facilitator profile not found"
+            }), 404
+        
+        # Extract basic info data
+        basic_info = profile.get('basic_info', {})
+        
+        # Format the response to match the onboarding step structure
+        step1_data = {
+            "first_name": basic_info.get('first_name'),
+            "last_name": basic_info.get('last_name'),
+            "email": basic_info.get('email'),
+            "location": basic_info.get('location')
+        }
+        
+        return jsonify({
+            "success": True,
+            "step": 1,
+            "step_name": "basic_info",
+            "data": step1_data,
+            "is_completed": bool(basic_info.get('first_name') and basic_info.get('last_name'))
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching step 1 basic info: {e}")
+        return jsonify({
+            "error": "Server error",
+            "message": "Failed to fetch basic information"
+        }), 500
+
+@facilitator_bp.route('/onboarding/step2-visual-profile', methods=['GET'])
+@token_required
+def get_step2_visual_profile():
+    """Get Step 2: Visual profile data"""
+    try:
+        facilitator_id = request.facilitator_id
+        
+        # Get complete profile
+        profile = facilitator_repo.get_complete_facilitator_profile(facilitator_id)
+        
+        if not profile:
+            return jsonify({
+                "error": "Profile not found",
+                "message": "Facilitator profile not found"
+            }), 404
+        
+        # Extract visual profile data
+        visual_profile = profile.get('visual_profile', {})
+        
+        # Format the response to match the onboarding step structure
+        step2_data = {
+            "banner_urls": visual_profile.get('banner_urls', []),
+            "profile_url": visual_profile.get('profile_url')
+        }
+        
+        return jsonify({
+            "success": True,
+            "step": 2,
+            "step_name": "visual_profile",
+            "data": step2_data,
+            "is_completed": bool(visual_profile.get('profile_url') or visual_profile.get('banner_urls'))
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching step 2 visual profile: {e}")
+        return jsonify({
+            "error": "Server error",
+            "message": "Failed to fetch visual profile"
+        }), 500
+
+@facilitator_bp.route('/onboarding/step3-professional-details', methods=['GET'])
+@token_required
+def get_step3_professional_details():
+    """Get Step 3: Professional details data"""
+    try:
+        facilitator_id = request.facilitator_id
+        
+        # Get complete profile
+        profile = facilitator_repo.get_complete_facilitator_profile(facilitator_id)
+        
+        if not profile:
+            return jsonify({
+                "error": "Profile not found",
+                "message": "Facilitator profile not found"
+            }), 404
+        
+        # Extract professional details data
+        professional_details = profile.get('professional_details', {})
+        
+        # Format the response to match the onboarding step structure
+        step3_data = {
+            "languages": professional_details.get('languages', []),
+            "teaching_styles": professional_details.get('teaching_styles', []),
+            "specializations": professional_details.get('specializations', [])
+        }
+        
+        return jsonify({
+            "success": True,
+            "step": 3,
+            "step_name": "professional_details",
+            "data": step3_data,
+            "is_completed": bool(professional_details.get('languages') or 
+                               professional_details.get('teaching_styles') or 
+                               professional_details.get('specializations'))
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching step 3 professional details: {e}")
+        return jsonify({
+            "error": "Server error",
+            "message": "Failed to fetch professional details"
+        }), 500
+
+@facilitator_bp.route('/onboarding/step4-bio-about', methods=['GET'])
+@token_required
+def get_step4_bio_about():
+    """Get Step 4: Bio and about information data"""
+    try:
+        facilitator_id = request.facilitator_id
+        
+        # Get complete profile
+        profile = facilitator_repo.get_complete_facilitator_profile(facilitator_id)
+        
+        if not profile:
+            return jsonify({
+                "error": "Profile not found",
+                "message": "Facilitator profile not found"
+            }), 404
+        
+        # Extract bio about data
+        bio_about = profile.get('bio_about', {})
+        
+        # Format the response to match the onboarding step structure
+        step4_data = {
+            "short_bio": bio_about.get('short_bio'),
+            "detailed_intro": bio_about.get('detailed_intro')
+        }
+        
+        return jsonify({
+            "success": True,
+            "step": 4,
+            "step_name": "bio_about",
+            "data": step4_data,
+            "is_completed": bool(bio_about.get('short_bio') or bio_about.get('detailed_intro'))
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching step 4 bio about: {e}")
+        return jsonify({
+            "error": "Server error",
+            "message": "Failed to fetch bio and about information"
+        }), 500
+
+@facilitator_bp.route('/onboarding/step5-experience-certifications', methods=['GET'])
+@token_required
+def get_step5_experience_certifications():
+    """Get Step 5: Experience and certifications data"""
+    try:
+        facilitator_id = request.facilitator_id
+        
+        # Get complete profile
+        profile = facilitator_repo.get_complete_facilitator_profile(facilitator_id)
+        
+        if not profile:
+            return jsonify({
+                "error": "Profile not found",
+                "message": "Facilitator profile not found"
+            }), 404
+        
+        # Extract experience and certifications data
+        experience = profile.get('experience', {})
+        certifications = profile.get('certifications', {})
+        
+        # Format the response to match the onboarding step structure
+        step5_data = {
+            "work_experiences": experience.get('work_experiences', []) if isinstance(experience, dict) else experience or [],
+            "certifications": certifications.get('certifications', []) if isinstance(certifications, dict) else certifications or []
+        }
+        
+        return jsonify({
+            "success": True,
+            "step": 5,
+            "step_name": "experience_certifications",
+            "data": step5_data,
+            "is_completed": bool(step5_data.get('work_experiences') or step5_data.get('certifications'))
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching step 5 experience certifications: {e}")
+        return jsonify({
+            "error": "Server error",
+            "message": "Failed to fetch experience and certifications"
+        }), 500
+
+@facilitator_bp.route('/onboarding/all-steps', methods=['GET'])
+@token_required
+def get_all_onboarding_steps():
+    """Get all onboarding steps data in one call"""
+    try:
+        facilitator_id = request.facilitator_id
+        
+        # Get complete profile
+        profile = facilitator_repo.get_complete_facilitator_profile(facilitator_id)
+        
+        if not profile:
+            return jsonify({
+                "error": "Profile not found",
+                "message": "Facilitator profile not found"
+            }), 404
+        
+        # Extract all step data
+        basic_info = profile.get('basic_info', {})
+        visual_profile = profile.get('visual_profile', {})
+        professional_details = profile.get('professional_details', {})
+        bio_about = profile.get('bio_about', {})
+        experience = profile.get('experience', {})
+        certifications = profile.get('certifications', {})
+        
+        # Prepare all steps data
+        all_steps = {
+            "step1_basic_info": {
+                "first_name": basic_info.get('first_name'),
+                "last_name": basic_info.get('last_name'),
+                "email": basic_info.get('email'),
+                "location": basic_info.get('location'),
+                "is_completed": bool(basic_info.get('first_name') and basic_info.get('last_name'))
+            },
+            "step2_visual_profile": {
+                "banner_urls": visual_profile.get('banner_urls', []),
+                "profile_url": visual_profile.get('profile_url'),
+                "is_completed": bool(visual_profile.get('profile_url') or visual_profile.get('banner_urls'))
+            },
+            "step3_professional_details": {
+                "languages": professional_details.get('languages', []),
+                "teaching_styles": professional_details.get('teaching_styles', []),
+                "specializations": professional_details.get('specializations', []),
+                "is_completed": bool(professional_details.get('languages') or 
+                                   professional_details.get('teaching_styles') or 
+                                   professional_details.get('specializations'))
+            },
+            "step4_bio_about": {
+                "short_bio": bio_about.get('short_bio'),
+                "detailed_intro": bio_about.get('detailed_intro'),
+                "is_completed": bool(bio_about.get('short_bio') or bio_about.get('detailed_intro'))
+            },
+            "step5_experience_certifications": {
+                "work_experiences": experience.get('work_experiences', []) if isinstance(experience, dict) else experience or [],
+                "certifications": certifications.get('certifications', []) if isinstance(certifications, dict) else certifications or [],
+                "is_completed": bool((experience.get('work_experiences', []) if isinstance(experience, dict) else experience or []) or 
+                                   (certifications.get('certifications', []) if isinstance(certifications, dict) else certifications or []))
+            }
+        }
+        
+        # Calculate overall completion
+        completed_steps = sum(1 for step_data in all_steps.values() if step_data.get('is_completed', False))
+        
+        return jsonify({
+            "success": True,
+            "total_steps": 5,
+            "completed_steps": completed_steps,
+            "completion_percentage": int((completed_steps / 5) * 100),
+            "all_steps_data": all_steps
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching all onboarding steps: {e}")
+        return jsonify({
+            "error": "Server error",
+            "message": "Failed to fetch onboarding data"
         }), 500

@@ -202,7 +202,11 @@ def onboarding_step2_visual_profile():
         facilitator_id = request.temp_facilitator_id
         
         # Check if step 1 is completed
-        current_step = facilitator_repo.get_facilitator_onboarding_status(facilitator_id)
+        onboarding_status = facilitator_repo.get_facilitator_onboarding_status(facilitator_id)
+        if "error" in onboarding_status:
+            return jsonify(onboarding_status), 400
+            
+        current_step = onboarding_status.get("current_step", 0)
         if current_step < 1:
             return jsonify({"error": "Please complete previous steps first"}), 400
         
@@ -239,7 +243,11 @@ def onboarding_step3_professional_details():
         facilitator_id = request.temp_facilitator_id
         
         # Check if step 2 is completed
-        current_step = facilitator_repo.get_facilitator_onboarding_status(facilitator_id)
+        onboarding_status = facilitator_repo.get_facilitator_onboarding_status(facilitator_id)
+        if "error" in onboarding_status:
+            return jsonify(onboarding_status), 400
+            
+        current_step = onboarding_status.get("current_step", 0)
         if current_step < 2:
             return jsonify({"error": "Please complete previous steps first"}), 400
         
@@ -277,7 +285,11 @@ def onboarding_step4_bio_about():
         facilitator_id = request.temp_facilitator_id
         
         # Check if step 3 is completed
-        current_step = facilitator_repo.get_facilitator_onboarding_status(facilitator_id)
+        onboarding_status = facilitator_repo.get_facilitator_onboarding_status(facilitator_id)
+        if "error" in onboarding_status:
+            return jsonify(onboarding_status), 400
+            
+        current_step = onboarding_status.get("current_step", 0)
         if current_step < 3:
             return jsonify({"error": "Please complete previous steps first"}), 400
         
@@ -315,7 +327,11 @@ def onboarding_step5_experience_certifications():
         phone_number = request.temp_phone_number
         
         # Check if step 4 is completed
-        current_step = facilitator_repo.get_facilitator_onboarding_status(facilitator_id)
+        onboarding_status = facilitator_repo.get_facilitator_onboarding_status(facilitator_id)
+        if "error" in onboarding_status:
+            return jsonify(onboarding_status), 400
+            
+        current_step = onboarding_status.get("current_step", 0)
         if current_step < 4:
             return jsonify({"error": "Please complete previous steps first"}), 400
         
@@ -365,7 +381,12 @@ def get_onboarding_status():
         facilitator_id = request.temp_facilitator_id
         
         # Get current onboarding status
-        current_step = facilitator_repo.get_facilitator_onboarding_status(facilitator_id)
+        onboarding_status = facilitator_repo.get_facilitator_onboarding_status(facilitator_id)
+        
+        if "error" in onboarding_status:
+            return jsonify(onboarding_status), 400
+            
+        current_step = onboarding_status.get("current_step", 0)
         
         return jsonify({
             "success": True,
@@ -373,7 +394,8 @@ def get_onboarding_status():
             "current_step": current_step,
             "total_steps": 5,
             "next_step": current_step + 1 if current_step < 5 else None,
-            "is_complete": current_step >= 5
+            "is_complete": current_step >= 5,
+            "detailed_status": onboarding_status
         }), 200
         
     except Exception as e:
@@ -395,6 +417,96 @@ def logout():
         
     except Exception as e:
         print(f"Error in logout: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+@auth_bp.route('/me', methods=['GET'])
+def get_current_user():
+    """Get current authenticated user information - standard /me endpoint"""
+    try:
+        token = get_token_from_request()
+        
+        if not token:
+            return jsonify({
+                "error": "No authentication token provided"
+            }), 401
+        
+        payload = decode_token(token)
+        
+        if not payload:
+            return jsonify({
+                "error": "Invalid or expired token"
+            }), 401
+        
+        if payload.get('type') == 'auth' and payload.get('is_authenticated'):
+            # Fully authenticated user - get full profile
+            facilitator_id = payload.get('facilitator_id')
+            phone_number = payload.get('phone_number')
+            
+            # Get user details from database
+            try:
+                user_profile = facilitator_repo.get_complete_facilitator_profile(facilitator_id)
+                
+                if user_profile and user_profile.get('success'):
+                    profile_data = user_profile.get('profile', {})
+                    
+                    return jsonify({
+                        "id": facilitator_id,
+                        "phone_number": phone_number,
+                        "email": profile_data.get('basic_info', {}).get('email'),
+                        "displayName": f"{profile_data.get('basic_info', {}).get('first_name', '')} {profile_data.get('basic_info', {}).get('last_name', '')}".strip(),
+                        "firstName": profile_data.get('basic_info', {}).get('first_name'),
+                        "lastName": profile_data.get('basic_info', {}).get('last_name'),
+                        "photoURL": profile_data.get('visual_profile', {}).get('profile_url'),
+                        "location": profile_data.get('basic_info', {}).get('location'),
+                        "phoneNumber": phone_number,
+                        "isAuthenticated": True,
+                        "userType": "facilitator",
+                        "onboardingComplete": profile_data.get('onboarding_complete', False)
+                    }), 200
+                else:
+                    # Fallback for authenticated user without complete profile
+                    return jsonify({
+                        "id": facilitator_id,
+                        "phone_number": phone_number,
+                        "phoneNumber": phone_number,
+                        "displayName": "Facilitator",
+                        "isAuthenticated": True,
+                        "userType": "facilitator",
+                        "onboardingComplete": False
+                    }), 200
+                    
+            except Exception as profile_error:
+                print(f"Error getting user profile: {profile_error}")
+                # Fallback response
+                return jsonify({
+                    "id": facilitator_id,
+                    "phone_number": phone_number,
+                    "phoneNumber": phone_number,
+                    "displayName": "Facilitator",
+                    "isAuthenticated": True,
+                    "userType": "facilitator",
+                    "onboardingComplete": False
+                }), 200
+                
+        elif payload.get('type') == 'onboarding' and payload.get('otp_verified'):
+            # User in onboarding process
+            return jsonify({
+                "id": payload.get('temp_facilitator_id'),
+                "phone_number": payload.get('temp_phone_number'),
+                "phoneNumber": payload.get('temp_phone_number'),
+                "displayName": "New Facilitator",
+                "isAuthenticated": False,
+                "userType": "facilitator",
+                "onboardingComplete": False,
+                "onboardingInProgress": True
+            }), 200
+        else:
+            return jsonify({
+                "error": "Invalid token type"
+            }), 401
+            
+    except Exception as e:
+        print(f"Error in /me endpoint: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
 @auth_bp.route('/auth-status', methods=['GET'])
@@ -432,7 +544,13 @@ def auth_status():
         elif payload.get('type') == 'onboarding' and payload.get('otp_verified'):
             # User in onboarding process - get current step
             temp_facilitator_id = payload.get('temp_facilitator_id')
-            current_step = facilitator_repo.get_facilitator_onboarding_status(temp_facilitator_id)
+            onboarding_status = facilitator_repo.get_facilitator_onboarding_status(temp_facilitator_id)
+            
+            if "error" in onboarding_status:
+                current_step = 0
+            else:
+                current_step = onboarding_status.get("current_step", 0)
+                
             return jsonify({
                 "authenticated": False,
                 "temp_facilitator_id": temp_facilitator_id,
@@ -465,6 +583,7 @@ def auth_status():
 @auth_bp.route('/onboarding/step5-experience-certifications', methods=['OPTIONS'])
 @auth_bp.route('/onboarding/status', methods=['OPTIONS'])
 @auth_bp.route('/logout', methods=['OPTIONS'])
+@auth_bp.route('/me', methods=['OPTIONS'])
 @auth_bp.route('/status', methods=['OPTIONS'])
 @auth_bp.route('/auth-status', methods=['OPTIONS'])
 def handle_options():
