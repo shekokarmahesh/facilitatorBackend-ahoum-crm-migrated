@@ -1,0 +1,20 @@
+[project]
+name = "facilitatorbackend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "flask>=3.1.1",
+    "flask-cors>=5.0.0",
+    "pyjwt>=2.10.1",
+    "python-dotenv>=1.1.0",
+    "psycopg2>=2.9.6",
+    "firebase-admin>=6.4.0",
+    "phonenumbers>=8.13.0",
+    "wasenderapi>=0.3.3",
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.12.0",
+    "psycopg2-binary>=2.9.10",
+    "requests>=2.32.4",
+]
