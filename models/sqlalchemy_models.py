@@ -295,6 +295,29 @@ class Course(Base):
     # Relationships
     practitioner = relationship("Practitioner", back_populates="courses")
 
+class CoursePromotionCall(Base):
+    """Track course promotion calls made by AI agents"""
+    __tablename__ = 'course_promotion_calls'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    practitioner_id = Column(Integer, ForeignKey('practitioners.id'), nullable=False, index=True)
+    course_id = Column(Integer, ForeignKey('courses.id'), nullable=False, index=True)
+    phone_number = Column(String(20), nullable=False, index=True)
+    call_status = Column(String(50), default='initiated', index=True)
+    call_outcome = Column(String(50), index=True)
+    call_duration = Column(Integer)  # in seconds
+    livekit_room_name = Column(String(255))
+    transcript_summary = Column(Text)
+    student_response = Column(Text)
+    follow_up_required = Column(Boolean, default=False)
+    scheduled_callback = Column(DateTime)
+    created_at = Column(DateTime, default=func.current_timestamp())
+    updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
+    
+    # Relationships
+    practitioner = relationship("Practitioner")
+    course = relationship("Course")
+
 # =============================================================================
 # DATABASE ENGINE AND SESSION MANAGEMENT
 # =============================================================================
@@ -373,4 +396,4 @@ def get_database_url() -> str:
     )
 
 # Global database engine instance
-db_engine = DatabaseEngine(get_database_url()) 
+db_engine = DatabaseEngine(get_database_url())

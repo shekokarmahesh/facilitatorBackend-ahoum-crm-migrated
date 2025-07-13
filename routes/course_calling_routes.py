@@ -3,7 +3,7 @@ Course Calling Routes
 API endpoints for course promotion calling functionality
 """
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, g
 import requests
 import logging
 import json
@@ -49,7 +49,7 @@ def test_livekit_config():
 def initiate_course_promotion_call(course_id):
     """Initiate AI call to promote specific course"""
     try:
-        practitioner_id = request.facilitator_id
+        practitioner_id = g.user.get('id')
         
         # Debug: Log raw request data
         logger.info(f"Raw request data: {request.data}")
@@ -109,7 +109,7 @@ def initiate_course_promotion_call(course_id):
         if success:
             # Update call status with room name
             if room_name:
-                course_calling_repo.update_call_status(call_id, 'connecting', room_name)
+                course_calling_repo.update_call_status(call_id, 'connecting', livekit_room_name=room_name)
             
             db_manager.close_connection()
             
@@ -232,7 +232,7 @@ def trigger_livekit_course_call(phone_number: str, course_context: dict, call_id
 def get_course_call_history(course_id):
     """Get call history for specific course"""
     try:
-        practitioner_id = request.facilitator_id
+        practitioner_id = g.user.get('id')
         limit = request.args.get('limit', 50, type=int)
         
         # Verify course belongs to practitioner using secure ORM
@@ -261,7 +261,7 @@ def get_course_call_history(course_id):
 def get_course_call_analytics(course_id):
     """Get call analytics for specific course"""
     try:
-        practitioner_id = request.facilitator_id
+        practitioner_id = g.user.get('id')
         
         # Verify course belongs to practitioner using secure ORM
         db_manager = DatabaseManager()
@@ -293,7 +293,7 @@ def get_course_call_analytics(course_id):
 def get_all_course_call_history():
     """Get all course promotion call history for practitioner"""
     try:
-        practitioner_id = request.facilitator_id
+        practitioner_id = g.user.get('id')
         limit = request.args.get('limit', 100, type=int)
         
         db_manager = DatabaseManager()
@@ -313,7 +313,6 @@ def get_all_course_call_history():
         return jsonify({'success': False, 'error': 'Failed to fetch call history'}), 500
 
 @course_calling_bp.route('/call/<int:call_id>/outcome', methods=['PUT'])
-@token_required
 def update_call_outcome(call_id):
     """Update call outcome (typically called by calling agent)"""
     try:
@@ -326,10 +325,6 @@ def update_call_outcome(call_id):
         practitioner_id = course_calling_repo.get_call_practitioner_id(call_id)
         if not practitioner_id:
             return jsonify({'success': False, 'error': 'Call not found'}), 404
-        
-        # For security, verify practitioner owns this call
-        if hasattr(request, 'facilitator_id') and practitioner_id != request.facilitator_id:
-            return jsonify({'success': False, 'error': 'Access denied'}), 403
         
         # Add practitioner_id to outcome data for stats update
         outcome_data = data.copy()
@@ -365,7 +360,7 @@ def update_call_status(call_id):
         
         db_manager = DatabaseManager()
         course_calling_repo = CourseCallingRepository(db_manager)
-        success = course_calling_repo.update_call_status(call_id, status, room_name)
+        success = course_calling_repo.update_call_status(call_id, status, livekit_room_name=room_name)
         
         db_manager.close_connection()
         
@@ -386,7 +381,7 @@ def update_call_status(call_id):
 def get_calling_dashboard_stats():
     """Get overall calling statistics for practitioner dashboard"""
     try:
-        practitioner_id = request.facilitator_id
+        practitioner_id = g.user.get('id')
         days = request.args.get('days', 30, type=int)
         
         db_manager = DatabaseManager()

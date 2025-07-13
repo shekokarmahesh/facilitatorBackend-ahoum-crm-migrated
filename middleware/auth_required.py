@@ -78,12 +78,17 @@ def token_required(f):
                 "message": "Please login again"
             }), 401
         
-        # Set user info in Flask's g object
+        # Set user info in Flask's g object and request object
         g.user = {
             'id': payload.get('facilitator_id'),
             'phone_number': payload.get('phone_number'),
             'is_authenticated': True
         }
+        
+        # Also set attributes on request object for easy access
+        request.facilitator_id = payload.get('facilitator_id')
+        request.phone_number = payload.get('phone_number')
+        request.is_authenticated = True
         
         return f(*args, **kwargs)
     

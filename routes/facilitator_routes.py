@@ -25,7 +25,7 @@ def get_facilitator_profile():
     try:
         facilitator_id = request.facilitator_id
         
-        profile = facilitator_repo.get_facilitator_profile(facilitator_id)
+        profile = facilitator_repo.get_complete_facilitator_profile(facilitator_id)
         
         if not profile:
             return jsonify({

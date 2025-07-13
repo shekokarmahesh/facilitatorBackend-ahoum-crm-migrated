@@ -11,6 +11,7 @@ from routes.campaigns_routes import campaigns_bp
 from routes.website_routes import website_bp
 from routes.courses_routes import courses_bp
 from routes.course_calling_routes import course_calling_bp
+from routes.general_calling_routes import general_calling_bp
 
 app = Flask(__name__)
 
@@ -67,6 +68,7 @@ app.register_blueprint(students_bp, url_prefix='/api/students')
 app.register_blueprint(campaigns_bp, url_prefix='/api/campaigns')
 app.register_blueprint(courses_bp)
 app.register_blueprint(course_calling_bp)
+app.register_blueprint(general_calling_bp)
 app.register_blueprint(website_bp)
 
 if __name__ == "__main__":

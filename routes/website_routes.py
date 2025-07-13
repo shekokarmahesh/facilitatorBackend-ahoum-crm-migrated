@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, g
 from middleware.auth_required import token_required
 from models.database import DatabaseManager, FacilitatorRepository
 import re
+import logging
 
 # Initialize database manager and repository
 db_manager = DatabaseManager()
@@ -56,13 +57,33 @@ def publish_website():
                 'message': 'This subdomain is already taken. Please choose another one.'
             }), 400
 
-<<<<<<< HEAD
-@website_bp.route('/status', methods=['GET'])
+        # Get current facilitator's ID from session
+        facilitator_id = g.user.get('id')
+
+        # Update facilitator's subdomain and publish status
+        facilitator_repo.update_facilitator_website({
+            'facilitator_id': facilitator_id,
+            'subdomain': subdomain,
+            'is_published': True
+        })
+
+        return jsonify({
+            'success': True,
+            'message': 'Website published successfully',
+            'subdomain': subdomain
+        })
+    except Exception as e:
+        return jsonify({
+            'error': 'Failed to publish website',
+            'message': str(e)
+        }), 500
+
+@website_bp.route('/api/facilitator/website/status', methods=['GET'])
 @token_required
 def get_website_status():
     """Get current website publishing status"""
     try:
-        facilitator_id = request.facilitator_id
+        facilitator_id = g.user.get('id')
         
         # Get practitioner data including website status
         website_data = facilitator_repo.get_website_status(facilitator_id)
@@ -87,32 +108,11 @@ def get_website_status():
             'success': False,
             'error': 'Internal server error'
         }), 500
-=======
-        # Get current facilitator's ID from session
-        facilitator_id = g.user.get('id')
->>>>>>> 6ae75d5c634c76742ccbd961df2fc535fb69032a
-
-        # Update facilitator's subdomain and publish status
-        facilitator_repo.update_facilitator_website({
-            'facilitator_id': facilitator_id,
-            'subdomain': subdomain,
-            'is_published': True
-        })
-
-        return jsonify({
-            'success': True,
-            'message': 'Website published successfully',
-            'subdomain': subdomain
-        })
-    except Exception as e:
-        return jsonify({
-            'error': 'Failed to publish website',
-            'message': str(e)
-        }), 500
 
 # CORS OPTIONS handlers
 @website_bp.route('/api/facilitator/check-subdomain/<subdomain>', methods=['OPTIONS'])
 @website_bp.route('/api/facilitator/publish-website', methods=['OPTIONS'])
+@website_bp.route('/api/facilitator/website/status', methods=['OPTIONS'])
 def handle_options():
     """Handle CORS preflight requests"""
     return '', 204 

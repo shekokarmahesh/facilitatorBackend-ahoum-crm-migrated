@@ -309,6 +309,7 @@ class CoursePromotionCall(Base):
     course_id = Column(Integer, ForeignKey('courses.id'), nullable=False, index=True)
     phone_number = Column(String(20), nullable=False, index=True)
     call_status = Column(String(50), default='initiated', index=True)
+    livekit_room_name = Column(String(255))
     call_start_time = Column(DateTime)
     call_end_time = Column(DateTime)
     call_duration = Column(Integer)  # in seconds
@@ -424,6 +425,163 @@ class DatabaseManager:
                 return session.execute(query, params)
             else:
                 return session.execute(query)
+    
+    # =============================================================================
+    # GENERAL CALLING HELPER METHODS
+    # =============================================================================
+    
+    def search_practitioners(self, query: str) -> List[Dict[str, Any]]:
+        """Search practitioners by phone, name, or practice type"""
+        try:
+            with self.get_session() as session:
+                practitioners = session.query(Practitioner).filter(
+                    or_(
+                        Practitioner.phone_number.ilike(f'%{query}%'),
+                        Practitioner.name.ilike(f'%{query}%'),
+                        Practitioner.practice_type.ilike(f'%{query}%'),
+                        Practitioner.location.ilike(f'%{query}%')
+                    )
+                ).limit(20).all()
+                
+                return [
+                    {
+                        'id': p.id,
+                        'name': p.name,
+                        'phone_number': p.phone_number,
+                        'email': p.email,
+                        'practice_type': p.practice_type,
+                        'location': p.location,
+                        'is_contacted': p.is_contacted,
+                        'contact_status': p.contact_status,
+                        'last_contacted_date': p.last_contacted_date.isoformat() if p.last_contacted_date else None,
+                        'onboarding_step': p.onboarding_step,
+                        'website_published': p.website_published,
+                        'subdomain': p.subdomain
+                    }
+                    for p in practitioners
+                ]
+        except Exception as e:
+            logger.error(f"Error searching practitioners: {e}")
+            return []
+    
+    def get_practitioner_by_phone(self, phone_number: str) -> Optional[Dict[str, Any]]:
+        """Get detailed practitioner information by phone number"""
+        try:
+            with self.get_session() as session:
+                practitioner = session.query(Practitioner).filter(
+                    Practitioner.phone_number == phone_number
+                ).first()
+                
+                if not practitioner:
+                    return None
+                
+                return {
+                    'id': practitioner.id,
+                    'name': practitioner.name,
+                    'phone_number': practitioner.phone_number,
+                    'email': practitioner.email,
+                    'practice_type': practitioner.practice_type,
+                    'location': practitioner.location,
+                    'about_us': practitioner.about_us,
+                    'website_url': practitioner.website_url,
+                    'social_media_links': practitioner.social_media_links,
+                    'is_contacted': practitioner.is_contacted,
+                    'last_contacted_date': practitioner.last_contacted_date.isoformat() if practitioner.last_contacted_date else None,
+                    'contact_status': practitioner.contact_status,
+                    'notes': practitioner.notes,
+                    'onboarding_step': practitioner.onboarding_step,
+                    'is_active': practitioner.is_active,
+                    'subdomain': practitioner.subdomain,
+                    'website_published': practitioner.website_published,
+                    'website_published_at': practitioner.website_published_at.isoformat() if practitioner.website_published_at else None,
+                    'website_status': practitioner.website_status,
+                    'created_at': practitioner.created_at.isoformat() if practitioner.created_at else None,
+                    'updated_at': practitioner.updated_at.isoformat() if practitioner.updated_at else None
+                }
+        except Exception as e:
+            logger.error(f"Error getting practitioner by phone: {e}")
+            return None
+    
+    def update_practitioner_contact_status(self, phone_number: str, status: str, notes: str = None) -> bool:
+        """Update practitioner contact status after a general call"""
+        try:
+            with self.get_session() as session:
+                practitioner = session.query(Practitioner).filter(
+                    Practitioner.phone_number == phone_number
+                ).first()
+                
+                if practitioner:
+                    practitioner.is_contacted = True
+                    practitioner.last_contacted_date = datetime.now()
+                    practitioner.contact_status = status
+                    if notes:
+                        practitioner.notes = notes
+                    
+                    session.commit()
+                    logger.info(f"Updated contact status for {phone_number}: {status}")
+                    return True
+                else:
+                    logger.warning(f"Practitioner not found for phone: {phone_number}")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Error updating contact status: {e}")
+            return False
+    
+    def create_or_update_practitioner(self, phone_number: str, practitioner_data: Dict[str, Any]) -> bool:
+        """Create new practitioner or update existing one"""
+        try:
+            with self.get_session() as session:
+                practitioner = session.query(Practitioner).filter(
+                    Practitioner.phone_number == phone_number
+                ).first()
+                
+                if practitioner:
+                    # Update existing practitioner
+                    for key, value in practitioner_data.items():
+                        if hasattr(practitioner, key) and value is not None:
+                            setattr(practitioner, key, value)
+                    practitioner.updated_at = datetime.now()
+                else:
+                    # Create new practitioner
+                    practitioner_data['phone_number'] = phone_number
+                    practitioner = Practitioner(**practitioner_data)
+                    session.add(practitioner)
+                
+                session.commit()
+                logger.info(f"{'Updated' if practitioner.id else 'Created'} practitioner: {phone_number}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error creating/updating practitioner: {e}")
+            return False
+    
+    def get_uncontacted_practitioners(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get list of practitioners who haven't been contacted yet"""
+        try:
+            with self.get_session() as session:
+                practitioners = session.query(Practitioner).filter(
+                    or_(
+                        Practitioner.is_contacted == False,
+                        Practitioner.is_contacted.is_(None)
+                    )
+                ).limit(limit).all()
+                
+                return [
+                    {
+                        'id': p.id,
+                        'name': p.name,
+                        'phone_number': p.phone_number,
+                        'email': p.email,
+                        'practice_type': p.practice_type,
+                        'location': p.location,
+                        'about_us': p.about_us[:200] + '...' if p.about_us and len(p.about_us) > 200 else p.about_us
+                    }
+                    for p in practitioners
+                ]
+        except Exception as e:
+            logger.error(f"Error getting uncontacted practitioners: {e}")
+            return []
 
 # =============================================================================
 # TEST FUNCTION
