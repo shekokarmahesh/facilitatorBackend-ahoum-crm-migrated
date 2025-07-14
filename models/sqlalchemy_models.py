@@ -390,10 +390,7 @@ class SecureRepository:
 
 def get_database_url() -> str:
     """Get database URL from environment with fallback"""
-    return os.getenv(
-        "POSTGRES_URL", 
-        "postgres://postgres:FBDzSdCB7f1BRS4QoqBURgA7POdcKhUBg7GIA016Rxyp8nAFUmqmUCaSFcsRA2QK@82.29.162.1:5438/postgres"
-    )
+    return os.getenv("POSTGRES_URL")
 
 # Global database engine instance
 db_engine = DatabaseEngine(get_database_url())

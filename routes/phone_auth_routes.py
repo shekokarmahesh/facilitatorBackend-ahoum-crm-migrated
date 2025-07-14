@@ -11,6 +11,8 @@ from middleware.auth_required import (
 import random
 import re
 from datetime import datetime
+from config import Config
+from twilio.rest import Client
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -34,12 +36,28 @@ def generate_otp():
 
 def send_sms(phone_number, message):
     """
-    Send SMS via your SMS provider
-    TODO: Implement with your chosen SMS service (Twilio, AWS SNS, etc.)
+    Send SMS via Twilio
     """
-    # For now, just log the OTP (replace with actual SMS service)
-    print(f"SMS to {phone_number}: {message}")
-    return True
+    try:
+        account_sid = Config.TWILIO_ACCOUNT_SID
+        auth_token = Config.TWILIO_AUTH_TOKEN
+        twilio_number = Config.TWILIO_PHONE_NUMBER
+
+        if not all([account_sid, auth_token, twilio_number]):
+            print("Twilio credentials are not set properly.")
+            return False
+
+        client = Client(account_sid, auth_token)
+        message = client.messages.create(
+            body=message,
+            from_=twilio_number,
+            to=phone_number
+        )
+        print(f"Twilio SMS sent to {phone_number}: SID {message.sid}")
+        return True
+    except Exception as e:
+        print(f"Error sending SMS via Twilio: {e}")
+        return False
 
 @auth_bp.route('/send-otp', methods=['POST'])
 def send_otp():

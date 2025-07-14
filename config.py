@@ -7,11 +7,10 @@ class Config:
     """Application configuration"""
     
     # Database Configuration - Use same database as calling system
-    POSTGRES_URL = os.getenv("POSTGRES_URL", 
-        "postgresql://postgres:FBDzSdCB7f1BRS4QoqBURgA7POdcKhUBg7GIA016Rxyp8nAFUmqmUCaSFcsRA2QK@82.29.162.1:5438/postgres")
+    POSTGRES_URL = os.getenv("POSTGRES_URL")
     
     # JWT Configuration
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
     JWT_EXPIRATION_DELTA = 24 * 60 * 60  # 24 hours in seconds
     
     # OTP Configuration
@@ -24,9 +23,9 @@ class Config:
     TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
     
     # WhatsApp Configuration (WasenderAPI)
-    WASENDER_API_KEY = os.getenv("WASENDER_API_KEY", "c254174f0fa60983e14d43c6ecdbe6ae054865c858a15ecc408c25456b822c23")
-    WASENDER_PHONE_NUMBER = os.getenv("WASENDER_PHONE_NUMBER", "+917777055014")
-    WASENDER_SESSION_NAME = os.getenv("WASENDER_SESSION_NAME", "Ahoum")
+    WASENDER_API_KEY = os.getenv("WASENDER_API_KEY")
+    WASENDER_PHONE_NUMBER = os.getenv("WASENDER_PHONE_NUMBER")
+    WASENDER_SESSION_NAME = os.getenv("WASENDER_SESSION_NAME")
     
     # Application Settings
     FLASK_ENV = os.getenv("FLASK_ENV", "development")
