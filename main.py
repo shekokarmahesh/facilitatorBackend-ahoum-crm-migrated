@@ -12,6 +12,7 @@ from routes.website_routes import website_bp
 from routes.courses_routes import courses_bp
 from routes.course_calling_routes import course_calling_bp
 from routes.general_calling_routes import general_calling_bp
+from routes.public_website_routes import public_website_bp
 
 app = Flask(__name__)
 
@@ -70,6 +71,7 @@ app.register_blueprint(courses_bp)
 app.register_blueprint(course_calling_bp)
 app.register_blueprint(general_calling_bp)
 app.register_blueprint(website_bp)
+app.register_blueprint(public_website_bp)
 
 if __name__ == "__main__":
     app.run(debug=True)

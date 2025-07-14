@@ -3,10 +3,15 @@ from flask import jsonify, request, g
 import jwt
 import os
 from datetime import datetime, timedelta
+from config import Config
 
 # JWT configuration
-JWT_SECRET = os.getenv('JWT_SECRET', 'your-jwt-secret-change-in-production')
+JWT_SECRET = Config.JWT_SECRET_KEY
 JWT_ALGORITHM = 'HS256'
+
+print(f"🔐 JWT Configuration:")
+print(f"   Secret: {JWT_SECRET[:10] if JWT_SECRET else 'None'}...")
+print(f"   Algorithm: {JWT_ALGORITHM}")
 
 def generate_temp_token(phone_number: str, facilitator_id: int):
     """Generate temporary token for onboarding process"""
@@ -103,15 +108,22 @@ def onboarding_token_required(f):
     def decorated_function(*args, **kwargs):
         token = get_token_from_request()
         
+        print(f"🔍 Onboarding Token Debug:")
+        print(f"   Token received: {token[:20] if token else 'None'}...")
+        print(f"   Authorization header: {request.headers.get('Authorization', 'None')}")
+        
         if not token:
+            print("   ❌ No token found")
             return jsonify({
                 "error": "Authentication required",
                 "message": "Please verify OTP first"
             }), 401
         
         payload = decode_token(token)
+        print(f"   Token payload: {payload}")
         
         if not payload:
+            print("   ❌ Token decode failed")
             return jsonify({
                 "error": "Invalid token",
                 "message": "Please verify OTP again"
@@ -119,10 +131,13 @@ def onboarding_token_required(f):
         
         # Check if it's an onboarding token
         if payload.get('type') != 'onboarding' or not payload.get('otp_verified'):
+            print(f"   ❌ Invalid token type: {payload.get('type')}, otp_verified: {payload.get('otp_verified')}")
             return jsonify({
                 "error": "Invalid token type",
                 "message": "Please verify OTP first"
             }), 401
+        
+        print(f"   ✅ Token validation successful")
         
         # Add temp info to request
         request.temp_phone_number = payload.get('temp_phone_number')

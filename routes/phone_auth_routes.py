@@ -81,7 +81,7 @@ def send_otp():
 
 @auth_bp.route('/verify-otp', methods=['POST'])
 def verify_otp():
-    """Verify OTP and determine user flow"""
+    """Verify OTP and determine user flow - ENHANCED"""
     try:
         data = request.get_json()
         phone_number = data.get('phone_number')
@@ -102,43 +102,79 @@ def verify_otp():
         
         if result["success"]:
             if result["is_new_user"]:
-                # New user - create facilitator account and generate temporary token for onboarding
-                facilitator_id = facilitator_repo.create_facilitator_account(phone_number, None)
+                # Truly new user - create facilitator account and generate temporary token for onboarding
+                facilitator_id = result["practitioner_id"]
                 
-                if facilitator_id:
-                    # Generate temporary token for onboarding
-                    temp_token = generate_temp_token(phone_number, facilitator_id)
-                    
-                    return jsonify({
-                        "success": True,
-                        "is_new_user": True,
-                        "redirect_to": "onboarding",
-                        "message": "OTP verified. Please complete your profile.",
-                        "current_step": 1,
-                        "total_steps": 5,
-                        "token": temp_token,
-                        "token_type": "onboarding"
-                    }), 200
-                else:
-                    return jsonify({"error": "Failed to create account. Please try again."}), 500
-            else:
-                # Existing user - generate authentication token
-                practitioner_id = result["practitioner_id"]
-                auth_token = generate_auth_token(practitioner_id, phone_number)
+                # Generate temporary token for onboarding
+                temp_token = generate_temp_token(phone_number, facilitator_id)
+                
+                print(f"🔑 Generated onboarding token for new user:")
+                print(f"   Phone: {phone_number}")
+                print(f"   Facilitator ID: {facilitator_id}")
+                print(f"   Token: {temp_token[:20]}...")
                 
                 return jsonify({
                     "success": True,
-                    "is_new_user": False,
-                    "redirect_to": "dashboard",
-                    "message": "Login successful",
-                    "token": auth_token,
-                    "token_type": "auth",
-                    "facilitator": {
-                        "id": practitioner_id,
-                        "phone_number": phone_number,
-                        "onboarding_step": result.get('onboarding_step', 0)
-                    }
+                    "is_new_user": True,
+                    "needs_onboarding": True,
+                    "redirect_to": "onboarding",
+                    "message": "OTP verified. Please complete your profile.",
+                    "current_step": 1,
+                    "total_steps": 5,
+                    "token": temp_token,
+                    "token_type": "onboarding",
+                    "prefilled_data": None
                 }), 200
+            else:
+                # Existing practitioner - check if they need onboarding
+                practitioner_id = result["practitioner_id"]
+                needs_onboarding = result["needs_onboarding"]
+                
+                if needs_onboarding:
+                    # Existing practitioner but needs CRM onboarding
+                    temp_token = generate_temp_token(phone_number, practitioner_id)
+                    
+                    print(f"🔑 Generated onboarding token for existing user:")
+                    print(f"   Phone: {phone_number}")
+                    print(f"   Practitioner ID: {practitioner_id}")
+                    print(f"   Token: {temp_token[:20]}...")
+                    
+                    # Get pre-filled data from calling system
+                    prefilled_data = facilitator_repo.get_prefilled_basic_info(practitioner_id)
+                    
+                    return jsonify({
+                        "success": True,
+                        "is_new_user": False,
+                        "needs_onboarding": True,
+                        "redirect_to": "onboarding",
+                        "message": "Welcome back! Please complete your CRM profile setup.",
+                        "current_step": result.get("onboarding_step", 0) + 1,
+                        "total_steps": 5,
+                        "token": temp_token,
+                        "token_type": "onboarding",
+                        "prefilled_data": prefilled_data,
+                        "has_calling_data": result.get("has_calling_data", False),
+                        "calling_data": result.get("calling_data")
+                    }), 200
+                else:
+                    # Fully onboarded practitioner - generate authentication token
+                    auth_token = generate_auth_token(practitioner_id, phone_number)
+                    
+                    return jsonify({
+                        "success": True,
+                        "is_new_user": False,
+                        "needs_onboarding": False,
+                        "redirect_to": "dashboard",
+                        "message": "Login successful",
+                        "token": auth_token,
+                        "token_type": "auth",
+                        "facilitator": {
+                            "id": practitioner_id,
+                            "phone_number": phone_number,
+                            "onboarding_step": result.get('onboarding_step', 0),
+                            "crm_onboarding_completed": result.get('crm_onboarding_completed', True)
+                        }
+                    }), 200
         else:
             # Return the error from OTP verification
             return jsonify({"error": result.get("error", "OTP verification failed")}), 400
@@ -338,12 +374,11 @@ def onboarding_step5_experience_certifications():
         # Get data
         data = request.get_json()
         
-        # Prepare experience and certifications data
-        exp_cert_data = {
-            "work_experiences": data.get('work_experiences', []),
-            "certifications": data.get('certifications', [])        }
+        # Prepare experience and certifications data - separate them properly
+        experience_data = data.get('work_experiences', [])
+        certification_data = data.get('certifications', [])
         
-        if facilitator_repo.save_experience_certifications(facilitator_id, exp_cert_data):
+        if facilitator_repo.save_experience_certifications(facilitator_id, experience_data, certification_data):
             # Generate authentication token for completed onboarding
             auth_token = generate_auth_token(facilitator_id, phone_number)
             

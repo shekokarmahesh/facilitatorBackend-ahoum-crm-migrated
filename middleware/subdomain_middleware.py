@@ -70,9 +70,9 @@ def require_valid_subdomain():
         def decorated_function(*args, **kwargs):
             if not hasattr(g, 'subdomain') or not g.subdomain:
                 return jsonify({
-                    'error': 'Invalid subdomain',
-                    'message': 'This endpoint requires a valid subdomain'
-                }), 400
+                    'error': 'Website not found',
+                    'message': 'This website is not published or does not exist'
+                }), 404
             
             if not hasattr(g, 'subdomain_practitioner') or not g.subdomain_practitioner:
                 return jsonify({

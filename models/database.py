@@ -54,6 +54,11 @@ class Practitioner(Base):
     onboarding_step = Column(Integer, default=0, index=True)
     is_active = Column(Boolean, default=True)
     
+    # NEW: CRM Platform Onboarding Status
+    crm_onboarding_completed = Column(Boolean, default=False, index=True)
+    crm_first_login_date = Column(DateTime)
+    crm_onboarding_completed_date = Column(DateTime)
+    
     # Website Publishing (existing columns)
     subdomain = Column(String(50), unique=True)
     website_published = Column(Boolean, default=False)
@@ -1043,6 +1048,46 @@ class FacilitatorRepository:
                 'website_published': practitioner.website_published,
                 'is_active': practitioner.is_active
             }
+    
+    def check_subdomain_exists(self, subdomain: str) -> bool:
+        """Check if subdomain already exists - SECURE"""
+        with self.db_manager.get_session() as session:
+            count = session.query(Practitioner).filter(
+                func.lower(Practitioner.subdomain) == func.lower(subdomain)
+            ).count()
+            return count > 0
+    
+    def update_facilitator_website(self, website_data: Dict[str, Any]) -> bool:
+        """Update facilitator website settings - SECURE"""
+        with self.db_manager.get_session() as session:
+            try:
+                facilitator_id = website_data.get('facilitator_id')
+                subdomain = website_data.get('subdomain')
+                is_published = website_data.get('is_published', False)
+                
+                practitioner = session.query(Practitioner).filter(
+                    Practitioner.id == facilitator_id
+                ).first()
+                
+                if not practitioner:
+                    raise ValueError(f"Practitioner {facilitator_id} not found")
+                
+                # Update website fields
+                practitioner.subdomain = subdomain.lower() if subdomain else None
+                practitioner.website_published = is_published
+                practitioner.website_status = 'live' if is_published else 'draft'
+                practitioner.website_published_at = func.current_timestamp() if is_published else None
+                practitioner.updated_at = func.current_timestamp()
+                
+                session.commit()
+                logger.info(f"✅ Updated website settings for facilitator {facilitator_id}")
+                return True
+                
+            except Exception as e:
+                session.rollback()
+                logger.error(f"❌ Error updating website settings: {e}")
+                raise
+    
     # =============================================================================
     # OTP AUTHENTICATION METHODS
     # =============================================================================
@@ -1074,7 +1119,7 @@ class FacilitatorRepository:
             return None
 
     def verify_otp_and_get_user_status(self, phone_number: str, otp: str) -> Dict[str, Any]:
-        """Verify OTP and determine if user is new or existing - SECURE"""
+        """Verify OTP and determine if user needs onboarding - ENHANCED"""
         try:
             from datetime import datetime
             with self.db_manager.get_session() as session:
@@ -1086,18 +1131,60 @@ class FacilitatorRepository:
                 ).first()
                 if not otp_record:
                     return {"success": False, "error": "Invalid or expired OTP"}
+                
                 otp_record.is_verified = True
                 practitioner = session.query(Practitioner).filter(
                     Practitioner.phone_number == phone_number
                 ).first()
-                is_new = practitioner is None
-                session.commit()
-                return {
-                    "success": True,
-                    "is_new_user": is_new,
-                    "practitioner_id": practitioner.id if practitioner else None,
-                    "onboarding_step": practitioner.onboarding_step if practitioner else 0
-                }
+                
+                if not practitioner:
+                    # Truly new user - create account
+                    practitioner = Practitioner(
+                        phone_number=phone_number,
+                        onboarding_step=0,
+                        crm_onboarding_completed=False,
+                        crm_first_login_date=func.now(),
+                        is_active=True,
+                        contact_status='new'
+                    )
+                    session.add(practitioner)
+                    session.commit()
+                    session.refresh(practitioner)
+                    
+                    return {
+                        "success": True,
+                        "is_new_user": True,
+                        "needs_onboarding": True,
+                        "practitioner_id": practitioner.id,
+                        "onboarding_step": 0,
+                        "crm_onboarding_completed": False
+                    }
+                else:
+                    # Existing practitioner - check CRM onboarding status
+                    needs_onboarding = not practitioner.crm_onboarding_completed
+                    
+                    # Update first login date if not set
+                    if not practitioner.crm_first_login_date:
+                        practitioner.crm_first_login_date = func.now()
+                        session.commit()
+                    
+                    return {
+                        "success": True,
+                        "is_new_user": False,
+                        "needs_onboarding": needs_onboarding,
+                        "practitioner_id": practitioner.id,
+                        "onboarding_step": practitioner.onboarding_step,
+                        "crm_onboarding_completed": practitioner.crm_onboarding_completed,
+                        "has_calling_data": practitioner.is_contacted,
+                        "calling_data": {
+                            "name": practitioner.name,
+                            "email": practitioner.email,
+                            "practice_type": practitioner.practice_type,
+                            "location": practitioner.location,
+                            "contact_status": practitioner.contact_status
+                        } if practitioner.is_contacted else None
+                    }
+                    
         except Exception as e:
             logger.error(f"Error verifying OTP: {e}")
             return {"success": False, "error": "Failed to verify OTP"}
@@ -1185,7 +1272,7 @@ class FacilitatorRepository:
             return {"error": "Failed to get onboarding status"}
 
     def save_basic_info(self, practitioner_id: int, basic_info_data: Dict[str, Any]) -> bool:
-        """Save basic info for facilitator - SECURE"""
+        """Save basic info for facilitator - ENHANCED with pre-fill support"""
         try:
             with self.db_manager.get_session() as session:
                 # Check if basic info already exists
@@ -1227,6 +1314,39 @@ class FacilitatorRepository:
         except Exception as e:
             logger.error(f"Error saving basic info: {e}")
             return False
+
+    def get_prefilled_basic_info(self, practitioner_id: int) -> Dict[str, Any]:
+        """Get pre-filled basic info from calling system data - NEW"""
+        try:
+            with self.db_manager.get_session() as session:
+                practitioner = session.query(Practitioner).filter(
+                    Practitioner.id == practitioner_id
+                ).first()
+                
+                if not practitioner:
+                    return {}
+                
+                # Extract name parts if available
+                first_name = ""
+                last_name = ""
+                if practitioner.name:
+                    name_parts = practitioner.name.split(' ', 1)
+                    first_name = name_parts[0] if len(name_parts) > 0 else ""
+                    last_name = name_parts[1] if len(name_parts) > 1 else ""
+                
+                return {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": practitioner.email,
+                    "location": practitioner.location,
+                    "phone_number": practitioner.phone_number,
+                    "has_calling_data": practitioner.is_contacted,
+                    "practice_type": practitioner.practice_type
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting pre-filled basic info: {e}")
+            return {}
 
     def save_visual_profile(self, practitioner_id: int, visual_data: Dict[str, Any]) -> bool:
         """Save visual profile for facilitator - SECURE"""
@@ -1343,46 +1463,50 @@ class FacilitatorRepository:
             return False
 
     def save_experience_certifications(self, practitioner_id: int, experience_data: List[Dict[str, Any]], certification_data: List[Dict[str, Any]]) -> bool:
-        """Save experience and certifications for facilitator - SECURE"""
+        """Save experience and certifications - Complete onboarding - ENHANCED"""
         try:
             with self.db_manager.get_session() as session:
-                # Handle work experience
-                if experience_data:
-                    # Remove existing work experience
-                    session.query(FacilitatorWorkExperience).filter(
-                        FacilitatorWorkExperience.practitioner_id == practitioner_id
-                    ).delete()
-                    
-                    # Add new work experience entries
-                    for exp in experience_data:
-                        work_exp = FacilitatorWorkExperience(
-                            practitioner_id=practitioner_id,
-                            **exp
-                        )
-                        session.add(work_exp)
+                # Clear existing records
+                session.query(FacilitatorWorkExperience).filter(
+                    FacilitatorWorkExperience.practitioner_id == practitioner_id
+                ).delete()
                 
-                # Handle certifications
-                if certification_data:
-                    # Remove existing certifications
-                    session.query(FacilitatorCertification).filter(
-                        FacilitatorCertification.practitioner_id == practitioner_id
-                    ).delete()
-                    
-                    # Add new certification entries
-                    for cert in certification_data:
-                        certification = FacilitatorCertification(
-                            practitioner_id=practitioner_id,
-                            **cert
-                        )
-                        session.add(certification)
+                session.query(FacilitatorCertification).filter(
+                    FacilitatorCertification.practitioner_id == practitioner_id
+                ).delete()
                 
-                # Update onboarding step
+                # Add work experiences
+                for exp in experience_data:
+                    work_exp = FacilitatorWorkExperience(
+                        practitioner_id=practitioner_id,
+                        job_title=exp.get('job_title'),
+                        company=exp.get('company'),
+                        duration=exp.get('duration'),
+                        description=exp.get('description')
+                    )
+                    session.add(work_exp)
+                
+                # Add certifications
+                for cert in certification_data:
+                    certification = FacilitatorCertification(
+                        practitioner_id=practitioner_id,
+                        certificate_name=cert.get('certificate_name'),
+                        issuing_organization=cert.get('issuing_organization'),
+                        date_received=cert.get('date_received'),
+                        credential_id=cert.get('credential_id')
+                    )
+                    session.add(certification)
+                
+                # Update practitioner onboarding step and mark CRM onboarding as completed
                 practitioner = session.query(Practitioner).filter(
                     Practitioner.id == practitioner_id
                 ).first()
                 
-                if practitioner and practitioner.onboarding_step < 5:
-                    practitioner.onboarding_step = 5
+                if practitioner:
+                    practitioner.onboarding_step = 6  # Complete all steps
+                    practitioner.crm_onboarding_completed = True  # NEW: Mark CRM onboarding complete
+                    practitioner.crm_onboarding_completed_date = func.now()  # NEW: Set completion date
+                    practitioner.updated_at = func.now()
                 
                 session.commit()
                 return True
