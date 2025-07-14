@@ -17,4 +17,5 @@ dependencies = [
     "alembic>=1.12.0",
     "psycopg2-binary>=2.9.10",
     "requests>=2.32.4",
+    "twilio>=9.0.0",
 ]
