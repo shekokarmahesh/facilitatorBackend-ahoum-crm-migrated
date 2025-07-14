@@ -380,27 +380,129 @@ def get_general_call_history():
 
 @general_calling_bp.route('/send-website-link', methods=['POST'])
 def send_practitioner_website_link():
-    """Send website link via WhatsApp to practitioner"""
+    """Send website link via WhatsApp to practitioner or course details to student"""
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid JSON data',
+                'details': 'Request body must contain valid JSON'
+            }), 400
+            
         phone_number = data.get('phone_number')
         practitioner_info = data.get('practitioner_info', {})
+        course_details = data.get('course_details')  # For course promotion calls
+        specific_info = data.get('specific_info')    # For course promotion calls
         
         if not phone_number:
             return jsonify({'success': False, 'error': 'Phone number required'}), 400
         
-        # Get practitioner details
-        name = practitioner_info.get('name', 'there')
-        practice_type = practitioner_info.get('practice_type', 'spiritual practice')
+        # Clean phone number for database lookup
+        clean_phone = phone_number
+        if not clean_phone.startswith('+'):
+            if clean_phone.startswith('91'):
+                clean_phone = '+' + clean_phone
+            else:
+                clean_phone = '+91' + clean_phone
         
-        # Create personalized website message
-        # Generate a clean URL-friendly name
-        url_name = name.lower().replace(' ', '-').replace("'", "").replace('"', '')
-        website_url = f"https://ahoum.com/practitioners/{url_name}"
+        # Fetch actual practitioner details from database
+        try:
+            from models.database import DatabaseManager
+            db_manager = DatabaseManager()
+            
+            # Get practitioner from database
+            db_practitioner = db_manager.get_practitioner_by_phone(clean_phone)
+            
+            if db_practitioner:
+                # Use database practitioner info
+                name = db_practitioner.get('name', 'there')
+                practice_type = db_practitioner.get('practice_type', 'spiritual practice')
+                location = db_practitioner.get('location', '')
+                about_us = db_practitioner.get('about_us', '')
+                
+                logger.info(f"Found practitioner in database: {name} - {practice_type}")
+            else:
+                # Fallback to request practitioner info if not in database
+                name = practitioner_info.get('name', 'there')
+                practice_type = practitioner_info.get('practice_type', 'spiritual practice')
+                location = practitioner_info.get('location', '')
+                about_us = practitioner_info.get('about_us', '')
+                
+                logger.info(f"Practitioner not found in database, using request info: {name} - {practice_type}")
+            
+            db_manager.close_connection()
+            
+        except Exception as db_error:
+            logger.error(f"Database error fetching practitioner: {db_error}")
+            # Fallback to request practitioner info
+            name = practitioner_info.get('name', 'there')
+            practice_type = practitioner_info.get('practice_type', 'spiritual practice')
+            location = practitioner_info.get('location', '')
+            about_us = practitioner_info.get('about_us', '')
         
-        message = f"""🌟 Hi {name}! 
+        # Determine if this is a course promotion call or general website link
+        is_course_promotion = course_details is not None
+        
+        if is_course_promotion:
+            # This is a course promotion call - send course details
+            logger.info(f"Sending course details to {phone_number} for course promotion")
+            
+            # Create course-specific message
+            message = f"""🎯 Hi there!
 
-I've created a beautiful website for your {practice_type} practice! 
+{course_details}
+
+📞 For registration and pricing details, please contact {name} directly.
+
+🌟 Thank you for your interest!
+
+- {name} & the Ahoum Team 🙏"""
+            
+            # For course promotion, we don't generate a website URL since it's about a specific course
+            website_url = None
+            
+        else:
+            # This is a general website promotion call
+            logger.info(f"Sending website link to {phone_number} for general promotion")
+            
+            # Create personalized website message
+            # Generate a clean URL-friendly name
+            url_name = name.lower().replace(' ', '-').replace("'", "").replace('"', '')
+            website_url = f"https://ahoum.com/practitioners/{url_name}"
+            
+            # Create location-specific greeting
+            location_greeting = f" in {location}" if location else ""
+            
+            # Create personalized message based on available information
+            if about_us:
+                # If we have about_us, create a more personalized message
+                message = f"""🌟 Hi {name}! 
+
+I've created a beautiful website for your {practice_type} practice{location_greeting}! 
+
+🌐 Your Website: {website_url}
+
+✨ What's included:
+• Professional responsive design
+• Online booking & scheduling
+• Student management system
+• Secure payment processing
+• SEO optimization for visibility
+• Course & session management
+
+🚀 Ready to go live! No technical skills needed - we handle everything.
+
+💬 Questions? Reply here or call back anytime!
+
+- Omee & the Ahoum Team 🙏
+
+P.S. This is completely free to start - we only take a small commission on paid bookings!"""
+            else:
+                # Standard message
+                message = f"""🌟 Hi {name}! 
+
+I've created a beautiful website for your {practice_type} practice{location_greeting}! 
 
 🌐 Your Website: {website_url}
 
@@ -425,16 +527,20 @@ P.S. This is completely free to start - we only take a small commission on paid 
             from services.whatsapp_service import WhatsAppService
             whatsapp_service = WhatsAppService()
             
-            logger.info(f"Attempting to send website link to {phone_number}")
+            logger.info(f"Attempting to send {'course details' if is_course_promotion else 'website link'} to {phone_number}")
+            logger.info(f"Message preview: {message[:100]}...")
             result = whatsapp_service.send_text_message(phone_number, message)
             
             if result.get('success'):
-                logger.info(f"Successfully sent website link to {phone_number}")
+                logger.info(f"Successfully sent {'course details' if is_course_promotion else 'website link'} to {phone_number}")
                 return jsonify({
                     'success': True,
-                    'message': 'Website link sent successfully via WhatsApp',
+                    'message': f"{'Course details' if is_course_promotion else 'Website link'} sent successfully via WhatsApp",
                     'phone_number': phone_number,
                     'website_url': website_url,
+                    'is_course_promotion': is_course_promotion,
+                    'practitioner_name': name,
+                    'practice_type': practice_type,
                     'whatsapp_result': result
                 }), 200
             else:
@@ -454,7 +560,7 @@ P.S. This is completely free to start - we only take a small commission on paid 
             }), 503
             
     except Exception as e:
-        logger.error(f"Error sending website link: {e}")
+        logger.error(f"Error in send_practitioner_website_link: {e}")
         return jsonify({
             'success': False,
             'error': 'Internal server error',

@@ -111,11 +111,12 @@ def init_subdomain_middleware(app):
         g.subdomain = subdomain
         g.subdomain_practitioner = None
         
-        # Only fetch practitioner data for public subdomain routes
-        if subdomain and request.endpoint and 'public' in request.endpoint:
+        # Fetch practitioner data for ANY subdomain request (not just 'public' endpoints)
+        if subdomain:
             try:
                 practitioner_data = facilitator_repo.get_practitioner_by_subdomain(subdomain)
                 g.subdomain_practitioner = practitioner_data
+                logging.info(f"Subdomain middleware: Found practitioner data for {subdomain}: {practitioner_data is not None}")
             except Exception as e:
                 logging.error(f"Error getting practitioner data for subdomain {subdomain}: {e}")
                 g.subdomain_practitioner = None

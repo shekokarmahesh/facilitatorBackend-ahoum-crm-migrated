@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, g, render_template_string
+from flask import Blueprint, jsonify, g, render_template_string, request
 from middleware.subdomain_middleware import require_valid_subdomain
 from models.database import DatabaseManager, FacilitatorRepository
 import logging
@@ -49,12 +49,24 @@ def serve_public_website():
         }), 500
 
 @public_website_bp.route('/api/data', methods=['GET'])
-@require_valid_subdomain()
 def get_public_website_data():
     """API endpoint to get website data for subdomain"""
     try:
-        practitioner_data = g.subdomain_practitioner
-        subdomain = g.subdomain
+        # First try to get subdomain from Host header (normal subdomain routing)
+        if hasattr(g, 'subdomain') and g.subdomain:
+            practitioner_data = g.subdomain_practitioner
+            subdomain = g.subdomain
+        else:
+            # Fallback: get subdomain from query parameter
+            subdomain = request.args.get('subdomain')
+            if not subdomain:
+                return jsonify({
+                    'error': 'Subdomain required',
+                    'message': 'Please provide subdomain parameter'
+                }), 400
+            
+            # Get practitioner data for the subdomain
+            practitioner_data = facilitator_repo.get_practitioner_by_subdomain(subdomain)
         
         if not practitioner_data:
             return jsonify({
@@ -64,6 +76,12 @@ def get_public_website_data():
         
         # Get complete profile data
         complete_profile = facilitator_repo.get_complete_facilitator_profile(practitioner_data['id'])
+        
+        if not complete_profile:
+            return jsonify({
+                'error': 'Profile not found',
+                'message': 'Practitioner profile data not available'
+            }), 404
         
         return jsonify({
             'success': True,

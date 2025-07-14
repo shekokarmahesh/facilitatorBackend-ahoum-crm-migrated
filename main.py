@@ -71,9 +71,10 @@ app.register_blueprint(courses_bp)
 app.register_blueprint(course_calling_bp)
 app.register_blueprint(general_calling_bp)
 app.register_blueprint(website_bp)
+# Register public website blueprint without url_prefix to handle root and /api/data routes
 app.register_blueprint(public_website_bp)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)
 
 
